@@ -61,8 +61,9 @@ python3 -m taxi_graph query --csv data/NYC.csv --from 40.7580 -73.9855 --to 40.6
 | `query --from LAT LON --to LAT LON` | Shortest-path estimate, route, per-leg times, direct-edge comparison |
 | `bench --sizes N... --queries Q --memory` | Build/BFS/DFS/Dijkstra timings per row count (`--memory` adds tracemalloc, which slows builds) |
 | `mst` | Kruskal minimum spanning forest (connectivity analysis, not a trip estimate) |
+| `validate --fold K --out F.json` | Hold out every K-th trip; accuracy vs actual durations and vs baselines; per time-of-day graph comparison. See [docs/results.md](docs/results.md) |
 
-Shared options for `stats`, `query`, `bench`, `mst`:
+Shared options for `stats`, `query`, `bench`, `mst`, `validate`:
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -80,12 +81,14 @@ Query statuses: `SUCCESS`, `NO_PATH`, `LOCATION_NOT_IN_GRAPH`, `INVALID_COORDINA
 
 Full dataset, default settings: about 5 s build, V = 4001, E = 117,785, Dijkstra about 5 ms per query, about 39 MB peak memory.
 
+Held-out validation (20% of trips): MAE 268 s versus 465 s for a constant-mean baseline. Time-of-day graphs cut MAE a further 8% (265.9 s to 244.7 s). Direct edges alone beat shortest path where they exist, because the shortest path underestimates by about 100 s. Details in [docs/results.md](docs/results.md).
+
 ## Layout
 
 ```
 taxi_graph/   loader, location, graph, traversal, heap, shortest_path, mst, pipeline, cli
 tests/        unit + pipeline tests (Dijkstra checked against Bellman-Ford)
-docs/         pipeline diagram
+docs/         pipeline diagram, validation + time-of-day results
 Dockerfile, docker-compose.yml
 ```
 
