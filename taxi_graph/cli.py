@@ -1,4 +1,4 @@
-"""Command line: generate | stats | query | bench | mst | validate."""
+"""Command line: generate | stats | query | bench | mst | validate | tune | complexity."""
 import argparse
 import json
 import random
@@ -189,6 +189,15 @@ def cmd_tune(a):
     print(_row("after scale", c["after"]))
 
 
+def cmd_complexity(a):
+    from .complexity import run_all
+    res = run_all(a.csv, a.out_dir, quick=a.quick)
+    print("\nlog-log slopes (1.0 = linear; n log n is slightly above 1 over these ranges):")
+    for k, v in res["loglog_slopes"].items():
+        print(f"  {k:<32} {v:.3f}")
+    print(f"\nwrote results.json and SVG plots to {a.out_dir}")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="taxi_graph", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -233,6 +242,12 @@ def main(argv=None):
     _add_data_args(t)
     t.add_argument("--out", help="also write full results as JSON")
     t.set_defaults(fn=cmd_tune)
+
+    cx = sub.add_parser("complexity", help="SP4: time/operation-count experiments vs Big-O; writes JSON + SVG")
+    cx.add_argument("--csv", required=True, help="trip CSV for the real-data experiments")
+    cx.add_argument("--out-dir", default="docs/sp4")
+    cx.add_argument("--quick", action="store_true", help="tiny sizes, for smoke tests")
+    cx.set_defaults(fn=cmd_complexity)
 
     a = p.parse_args(argv)
     try:

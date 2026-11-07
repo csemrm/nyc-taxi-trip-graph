@@ -29,7 +29,7 @@ python3 -m unittest tests.test_algorithms.DijkstraTests.test_competing_paths   #
 python3 -m taxi_graph --help
 ```
 
-Reference numbers (full dataset, default 0.005 deg grid, mean): build ~5 s, V=4001, E=117,785, Dijkstra ~5 ms avg/query. `bench --memory` enables tracemalloc and inflates build time.
+Reference numbers (full dataset, default 0.005 deg grid, mean): build ~5 s, V=4001, E=117,785, Dijkstra ~5 ms avg over random pairs (65% of random pairs are unreachable and fail fast), ~20 ms mean for reachable pairs. `complexity --csv ... --out-dir docs/sp4` regenerates the SP4 measurements and SVG plots. `bench --memory` enables tracemalloc and inflates build time.
 
 ## Code map
 
