@@ -11,6 +11,7 @@ from .perf import measure
 from .pipeline import Engine, build
 from .shortest_path import Dijkstra, SUCCESS, fmt_duration
 from .synthetic import generate
+from .selection import run_selection
 from .validation import run_validation
 
 
@@ -155,6 +156,35 @@ def cmd_validate(a):
     print_validation(r)
 
 
+def cmd_tune(a):
+    r = run_selection(_cfg(a))
+    if a.out:
+        with open(a.out, "w") as f:
+            json.dump(r, f, indent=2)
+    sp, sel = r["split"], r["selected_on_validation"]
+    print(f"split: train={sp['train_trips']} validation={sp['validation_trips']} "
+          f"test={sp['test_trips']} (covered predictable: {sp['test_predictable_covered']}); "
+          f"V={r['graph']['V']} E={r['graph']['E_all_day']}")
+    print("\nChosen on VALIDATION only:")
+    for p in sel["periods"]:
+        print(f"  {p['period']:<8} val n={p['val_trips']:<6} MAE all-day={p['val_mae_all_day_s']:.1f}s "
+              f"period={p['val_mae_period_s']:.1f}s -> "
+              f"{'period graph' if p['use_period_graph'] else 'all-day graph'}")
+    print(f"  chained-path scale factor = {sel['chain_scale_factor']:.4f} "
+          f"(fit on {sel['chain_fit_trips']} validation trips)")
+    print("\nTEST results:")
+    t = r["test"]
+    print(_row("all-day, direct first", t["all_day_df"]))
+    print(_row("all-day + chain scale", t["all_day_df_calibrated"]))
+    print(_row("period graphs, direct first", t["period_df"]))
+    print(_row("selected periods", t["selected_df"]))
+    print(_row("selected + chain scale", t["selected_df_calibrated"]))
+    c = r["test_chained_only"]
+    print("\nTEST, chained-path trips only (no direct edge):")
+    print(_row("before scale", c["before"]))
+    print(_row("after scale", c["after"]))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="taxi_graph", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -192,6 +222,11 @@ def main(argv=None):
     v.add_argument("--fold", type=int, default=5, help="hold out every FOLD-th trip (default 5 = 20%%)")
     v.add_argument("--out", help="also write full results as JSON")
     v.set_defaults(fn=cmd_validate)
+
+    t = sub.add_parser("tune", help="train/validation/test: choose periods + chain scale on validation, report test")
+    _add_data_args(t)
+    t.add_argument("--out", help="also write full results as JSON")
+    t.set_defaults(fn=cmd_tune)
 
     a = p.parse_args(argv)
     try:

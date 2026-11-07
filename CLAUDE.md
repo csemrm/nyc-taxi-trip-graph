@@ -37,6 +37,8 @@ Reference numbers (full dataset, default 0.005 deg grid, mean): build ~5 s, V=40
 
 `validation` (separate from `pipeline`) does the train/test split (every `fold`-th cleaned trip is test; graph, index and baseline use train only), per-period graphs (`PERIODS`) and error metrics. It uses `Dijkstra.distances()` (multi-target, early stop) so predictions cost one search per distinct origin. `iter_clean_trips(..., with_hour=True)` appends the pickup hour. Results and caveats are in `docs/results.md`; key findings: shortest path is biased about -100 s, so `Engine.estimate()` uses a direct edge when one exists and the shortest path otherwise (MAE 268 s -> 250 s); period graphs help mainly at night/evening and slightly hurt other periods under direct-first.
 
+`selection.run_selection` (CLI `tune`) is the clean protocol for any data-fitted choice: index % 5 == 0 test, == 1 validation, rest train; fit on validation, report once on test. Result: use period graphs only for night and evening (MAE 252 -> 237 s); a chained-path scale factor fixed bias but not error and was not adopted. Query path (`Engine`) still uses one all-day graph; period selection is evaluation-only so far.
+
 Performance design choices to preserve:
 - One int key per grid cell and one packed int `(u<<32)|v` per edge; single pass aggregation O(T).
 - CSR built by counting sort O(V+E); plain lists (not `array`) in hot loops for speed.

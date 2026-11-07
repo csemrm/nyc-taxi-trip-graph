@@ -62,6 +62,7 @@ python3 -m taxi_graph query --csv data/NYC.csv --from 40.7580 -73.9855 --to 40.6
 | `bench --sizes N... --queries Q --memory` | Build/BFS/DFS/Dijkstra timings per row count (`--memory` adds tracemalloc, which slows builds) |
 | `mst` | Kruskal minimum spanning forest (connectivity analysis, not a trip estimate) |
 | `validate --fold K --out F.json` | Hold out every K-th trip; accuracy vs actual durations and vs baselines; per time-of-day graph comparison. See [docs/results.md](docs/results.md) |
+| `tune --out F.json` | Train/validation/test (60/20/20): choose which periods use their own graph and test a chained-path scale factor on validation, report on test |
 
 Shared options for `stats`, `query`, `bench`, `mst`, `validate`:
 
@@ -81,7 +82,7 @@ Query statuses: `SUCCESS`, `NO_PATH`, `LOCATION_NOT_IN_GRAPH`, `INVALID_COORDINA
 
 Full dataset, default settings: about 5 s build, V = 4001, E = 117,785, Dijkstra about 5 ms per query, about 39 MB peak memory.
 
-Held-out validation (20% of trips), MAE: constant-mean baseline 465 s, shortest path 268 s, direct edge else shortest path 250 s (shortest path alone is biased about -100 s), period graphs with direct-first 239 s. The period-graph gain comes mainly from night and evening trips. `query` reports the direct-first estimate. Details and caveats in [docs/results.md](docs/results.md).
+Held-out validation (20% of trips), MAE: constant-mean baseline 465 s, shortest path 268 s, direct edge else shortest path 250 s (shortest path alone is biased about -100 s), period graphs with direct-first 239 s. The period-graph gain comes from night and evening trips; choosing only those periods on a separate validation split gives 237 s versus 252 s for the all-day graph (60% train). A chained-path scale factor removed bias but did not reduce error, so it was not adopted. `query` reports the direct-first estimate. Details and caveats in [docs/results.md](docs/results.md).
 
 ## Layout
 

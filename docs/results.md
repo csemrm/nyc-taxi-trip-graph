@@ -84,6 +84,53 @@ Same comparison, but each estimator uses a direct edge when it exists (period gr
 
 Best configuration overall: period graphs with direct-first (MAE 238.9 s, median AE 149.3 s, within-20% 43.6%, bias -3.2 s). But the gain is concentrated at **night and evening**; in the morning rush, midday and evening rush the period graph is slightly *worse* than the all-day graph once direct edges are used (sparser per-period edge means are noisier). The earlier "8% better everywhere" reading only holds for the shortest-path estimator. A practical rule from this data is to use period graphs for night and evening and the all-day graph otherwise; we did not implement or test that selection, so it would need its own held-out check.
 
+## 3. Choices made on a separate validation split
+
+Sections 1-2 looked at the test set when deciding what to try, so the follow-up ideas ("use period graphs only at night and evening", "correct the chained-path bias") got a proper protocol: kept-trip index % 5 == 0 is test (the same 291,162 test trips as above), == 1 is validation, the rest (60%, 873,489 trips) is train. Choices are fitted on **validation only** and scored once on test.
+
+```bash
+python3 -m taxi_graph tune --csv data/NYC.csv --out docs/selection_results.json
+```
+
+Raw numbers: [selection_results.json](selection_results.json). Graph and location index use the 60% train set, so absolute numbers are slightly worse than in sections 1-2 (all-day direct-first MAE 252.0 s here versus 249.8 s with 80% train).
+
+### Period selection (works)
+
+Chosen per period by lower validation MAE:
+
+| Period | Validation MAE all-day | Validation MAE period | Chosen |
+|---|---|---|---|
+| night 00-06 | 282.3 s | 206.2 s | period graph |
+| am rush 06-10 | 261.2 s | 269.5 s | all-day graph |
+| midday 10-16 | 259.4 s | 271.3 s | all-day graph |
+| pm rush 16-20 | 241.0 s | 252.9 s | all-day graph |
+| evening 20-24 | 229.6 s | 203.7 s | period graph |
+
+The validation split picks the same two periods the test set suggested, so that choice was not a test-set artifact.
+
+| Test estimator (286,405 covered trips) | MAE | median AE | RMSE | bias | within 20% |
+|---|---|---|---|---|---|
+| All-day graph, direct first | 252.0 s | 164.5 s | 408.4 s | -8.0 s | 39.9% |
+| Period graphs everywhere, direct first | 243.9 s | 151.1 s | 414.7 s | -2.3 s | 43.1% |
+| **Selected periods (night, evening), direct first** | **237.1 s** | **145.8 s** | **403.2 s** | -44.3 s | **43.7%** |
+
+Selecting periods cuts MAE 5.9% against the all-day graph and 2.8% against using period graphs everywhere, and improves the median error too. Note the overall bias (-44 s) is larger than for either alternative; we did not investigate why.
+
+### Chained-path scale factor (does not help)
+
+One constant, 1.128 = sum(actual) / sum(predicted) over 14,810 validation trips answered by a chained path (no direct edge). On the 14,748 such test trips:
+
+| | MAE | median AE | RMSE | bias | within 20% |
+|---|---|---|---|---|---|
+| Before scale | **483.0 s** | **294.0 s** | **760.9 s** | -148.3 s | 41.4% |
+| After scale | 489.9 s | 311.2 s | 771.2 s | **+19.8 s** | 40.1% |
+
+Scaling removes the bias but every error metric gets slightly worse: the errors on these trips are spread widely, so shifting the center does not reduce them. **Not adopted.** Overall it also changes nothing useful (all-day MAE 252.0 s to 252.4 s; selected periods 237.1 s to 238.4 s).
+
+### Not yet wired into the query path
+
+`Engine` and the `query` command still use a single all-day graph with direct-first estimation. Using period graphs for night and evening at query time needs per-period graph building and a pickup-hour argument; the selection above is evaluation only.
+
 ## Caveats
 
 - The split is by row order, not chronological. Dataset rows are not time-ordered, so this approximates random hold-out; a time-based split would be a stricter test.

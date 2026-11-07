@@ -1,0 +1,141 @@
+{
+  "config": {
+    "csv_path": "/Volumes/Backup/sfbu/NYC Taxi Trip/data/NYC.csv",
+    "max_rows": null,
+    "lat_min": 40.45,
+    "lat_max": 41.0,
+    "lon_min": -74.3,
+    "lon_max": -73.65,
+    "cell_deg": 0.005,
+    "min_duration": 1.0,
+    "max_duration": 21600.0,
+    "stat": "mean",
+    "min_trips": 1,
+    "hour_range": null
+  },
+  "split": {
+    "train_trips": 873489,
+    "validation_trips": 291163,
+    "test_trips": 291162,
+    "test_predictable_covered": 286405
+  },
+  "graph": {
+    "V": 3494,
+    "E_all_day": 91623
+  },
+  "selected_on_validation": {
+    "periods": [
+      {
+        "period": "night",
+        "val_trips": 33411,
+        "val_mae_all_day_s": 282.3351951537033,
+        "val_mae_period_s": 206.16916486748582,
+        "use_period_graph": true
+      },
+      {
+        "period": "am_rush",
+        "val_trips": 43944,
+        "val_mae_all_day_s": 261.1534607790246,
+        "val_mae_period_s": 269.5455344073814,
+        "use_period_graph": false
+      },
+      {
+        "period": "midday",
+        "val_trips": 83158,
+        "val_mae_all_day_s": 259.3537992748118,
+        "val_mae_period_s": 271.25673940969943,
+        "use_period_graph": false
+      },
+      {
+        "period": "pm_rush",
+        "val_trips": 63099,
+        "val_mae_all_day_s": 241.01596083778685,
+        "val_mae_period_s": 252.8575317067831,
+        "use_period_graph": false
+      },
+      {
+        "period": "evening",
+        "val_trips": 62788,
+        "val_mae_all_day_s": 229.58662596550036,
+        "val_mae_period_s": 203.72155140010193,
+        "use_period_graph": true
+      }
+    ],
+    "chain_scale_factor": 1.1281197934380311,
+    "chain_fit_trips": 14810
+  },
+  "test": {
+    "all_day_df": {
+      "n": 286405,
+      "mae_s": 252.0235135227194,
+      "median_ae_s": 164.54999999999995,
+      "rmse_s": 408.4435788652023,
+      "bias_s": -7.9542725121474005,
+      "mape": 0.3783046923148881,
+      "median_ape": 0.25923682616596,
+      "within_20pct": 0.39870812311237586
+    },
+    "all_day_df_calibrated": {
+      "n": 286405,
+      "mae_s": 252.37958819479414,
+      "median_ae_s": 165.15789473684208,
+      "rmse_s": 409.4337173921444,
+      "bias_s": 0.7036486966241642,
+      "mape": 0.38133435967503715,
+      "median_ape": 0.25969679769168913,
+      "within_20pct": 0.3980342521953178
+    },
+    "period_df": {
+      "n": 286405,
+      "mae_s": 243.94404479970072,
+      "median_ae_s": 151.0769230769231,
+      "rmse_s": 414.7083209008006,
+      "bias_s": -2.2793918155843627,
+      "mape": 0.37672725611425767,
+      "median_ape": 0.23822629969418957,
+      "within_20pct": 0.4314379986382919
+    },
+    "selected_df": {
+      "n": 286405,
+      "mae_s": 237.06614524317177,
+      "median_ae_s": 145.75,
+      "rmse_s": 403.213046226945,
+      "bias_s": -44.32901489010799,
+      "mape": 0.34705272009028487,
+      "median_ape": 0.23366013071895425,
+      "within_20pct": 0.43688483092124786
+    },
+    "selected_df_calibrated": {
+      "n": 286405,
+      "mae_s": 238.429028517483,
+      "median_ae_s": 146.57142857142858,
+      "rmse_s": 408.4160067477158,
+      "bias_s": -31.73088142368741,
+      "mape": 0.35279456496924905,
+      "median_ape": 0.23428858722976367,
+      "within_20pct": 0.43593163527173057
+    }
+  },
+  "test_chained_only": {
+    "before": {
+      "n": 14748,
+      "mae_s": 483.0260960939111,
+      "median_ae_s": 294.0,
+      "rmse_s": 760.9110997031688,
+      "bias_s": -148.34293058263856,
+      "mape": 0.46897339948068184,
+      "median_ape": 0.24776526331644444,
+      "within_20pct": 0.4139544344995932
+    },
+    "after": {
+      "n": 14748,
+      "mae_s": 489.94103821864377,
+      "median_ae_s": 311.19157873487023,
+      "rmse_s": 771.1758447502691,
+      "bias_s": 19.793218305225547,
+      "mape": 0.5278093013170992,
+      "median_ape": 0.25594619307639654,
+      "within_20pct": 0.4008679142934635
+    }
+  }
+}
