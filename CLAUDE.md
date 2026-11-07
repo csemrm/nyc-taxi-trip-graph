@@ -9,7 +9,7 @@ Python 3.12, **stdlib only** (no dependencies), packaged in `taxi_graph/`, tests
 - `Requirements Analysis NYC Taxi Trip Duration Estimation-1.pdf` — FR-01..16, NFR-01..07, user stories, MoSCoW
 - `SP3_Project_Architecture_NYC_Taxi (1).pdf` — module design, data structures, query/result contract
 
-Dataset: `data/NYC.csv` (Kaggle `yasserh/nyc-taxi-trip-duration`, 1,458,644 rows; gitignored, mounted into Docker at `/data`). The official competition download returns 403 unless competition rules are accepted on the Kaggle account; the dataset mirror was used instead. `python -m taxi_graph generate` writes deterministic synthetic CSVs.
+Dataset: `data/NYC.csv` (Kaggle `yasserh/nyc-taxi-trip-duration`, 1,458,644 rows, 200 MB; tracked with Git LFS via `.gitattributes`, so `git lfs install` is needed before cloning and a pointer file means `git lfs pull` was skipped; every other file under `data/` stays gitignored; mounted into Docker at `/data`). The official competition download returns 403 unless competition rules are accepted on the Kaggle account; the dataset mirror was used instead. `python -m taxi_graph generate` writes deterministic synthetic CSVs.
 
 ## Commands
 
