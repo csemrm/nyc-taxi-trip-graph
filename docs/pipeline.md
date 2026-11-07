@@ -59,6 +59,6 @@ V, E and timings are for the full Kaggle dataset with the default 0.005° grid a
 ## Why it is fast
 
 - **Indexed heap:** tracks each vertex's position, so decrease-key is O(log V) and the heap never holds more than V entries.
-- **Early stop:** Dijkstra stops when the destination is popped; a typical query visits about 700 of 4001 vertices.
+- **Early stop:** Dijkstra stops when the destination is popped; for pairs that have a path, a query settles about 48% of the vertices a full search from the same source would (about 1,800 of 4,001) and takes about 76% of the time. Pairs with no path explore the source's whole reachable set before failing (65% of random pairs). Measured in [SP4](SP4_Analysis_Algorithm_Complexity.md).
 - **Workspace reuse:** `dist`, `parent` and the heap are allocated once; each query resets only the vertices it touched.
 - **Flat storage:** CSR lists plus one packed int per edge key; about 39 MB peak on the full dataset.

@@ -80,7 +80,7 @@ Query statuses: `SUCCESS`, `NO_PATH`, `LOCATION_NOT_IN_GRAPH`, `INVALID_COORDINA
 
 ## Reference results
 
-Full dataset, default settings: about 5 s build, V = 4001, E = 117,785, Dijkstra about 5 ms per query, about 39 MB peak memory.
+Full dataset, default settings: about 5 s build, V = 4001, E = 117,785, about 39 MB peak memory. Dijkstra: about 5 ms averaged over random pairs, but 65% of random pairs have no path and fail quickly; for pairs that do have a path a query takes about 20 ms on average (p90 26 ms). See [SP4 complexity analysis](docs/SP4_Analysis_Algorithm_Complexity.md).
 
 Held-out validation (20% of trips), MAE: constant-mean baseline 465 s, shortest path 268 s, direct edge else shortest path 250 s (shortest path alone is biased about -100 s), period graphs with direct-first 239 s. The period-graph gain comes from night and evening trips; choosing only those periods on a separate validation split gives 237 s versus 252 s for the all-day graph (60% train). A chained-path scale factor removed bias but did not reduce error, so it was not adopted. `query` reports the direct-first estimate. Details and caveats in [docs/results.md](docs/results.md).
 
