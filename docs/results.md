@@ -127,9 +127,9 @@ One constant, 1.128 = sum(actual) / sum(predicted) over 14,810 validation trips 
 
 Scaling removes the bias but every error metric gets slightly worse: the errors on these trips are spread widely, so shifting the center does not reduce them. **Not adopted.** Overall it also changes nothing useful (all-day MAE 252.0 s to 252.4 s; selected periods 237.1 s to 238.4 s).
 
-### Not yet wired into the query path
+### In the query path
 
-`Engine` and the `query` command still use a single all-day graph with direct-first estimation. Using period graphs for night and evening at query time needs per-period graph building and a pickup-hour argument; the selection above is evaluation only.
+`query --hour H` builds night and evening graphs (`pipeline.SELECTED_PERIODS`) alongside the all-day graph. For a pickup hour inside one of those periods it tries the period graph first (direct edge, then shortest path) and falls back to the all-day graph; other hours and no `--hour` use the all-day graph. The period choice was fitted on validation trips only, but the end-to-end query path was not re-scored separately.
 
 ## Caveats
 

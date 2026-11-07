@@ -58,7 +58,7 @@ python3 -m taxi_graph query --csv data/NYC.csv --from 40.7580 -73.9855 --to 40.6
 |---|---|
 | `generate --out F --trips N --seed S` | Write a synthetic CSV |
 | `stats` | Build graph; print cleaning summary, V, E, components, BFS reach |
-| `query --from LAT LON --to LAT LON` | Shortest-path estimate, route, per-leg times, direct-edge comparison |
+| `query --from LAT LON --to LAT LON [--hour H]` | Best estimate (direct edge, else shortest path), route, per-leg times. With `--hour`, night (0-6) and evening (20-24) pickups use time-of-day graphs |
 | `bench --sizes N... --queries Q --memory` | Build/BFS/DFS/Dijkstra timings per row count (`--memory` adds tracemalloc, which slows builds) |
 | `mst` | Kruskal minimum spanning forest (connectivity analysis, not a trip estimate) |
 | `validate --fold K --out F.json` | Hold out every K-th trip; accuracy vs actual durations and vs baselines; per time-of-day graph comparison. See [docs/results.md](docs/results.md) |

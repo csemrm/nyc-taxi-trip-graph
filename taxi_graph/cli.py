@@ -8,7 +8,7 @@ from . import traversal
 from .config import Config
 from .mst import kruskal
 from .perf import measure
-from .pipeline import Engine, build
+from .pipeline import Engine, build, selected_periods
 from .shortest_path import Dijkstra, SUCCESS, fmt_duration
 from .synthetic import generate
 from .selection import run_selection
@@ -52,13 +52,17 @@ def cmd_stats(a):
 
 
 def cmd_query(a):
-    b = build(_cfg(a))
+    if a.hour is not None and not 0 <= a.hour <= 23:
+        raise ValueError("--hour must be 0-23")
+    b = build(_cfg(a), periods=selected_periods() if a.hour is not None else None)
     eng = Engine(b)
-    r, est, basis = eng.estimate(a.src[0], a.src[1], a.dst[0], a.dst[1])
+    r, est, basis = eng.estimate(a.src[0], a.src[1], a.dst[0], a.dst[1], hour=a.hour)
     print(f"status: {r.status}")
     if r.status == SUCCESS:
-        print(f"best estimate: {fmt_duration(est)} ({est:.1f} s, basis: "
-              f"{'direct edge' if basis == 'direct' else 'shortest path'})")
+        label = {"direct": "direct edge", "path": "shortest path",
+                 "period-direct": "period graph, direct edge",
+                 "period-path": "period graph, shortest path"}[basis]
+        print(f"best estimate: {fmt_duration(est)} ({est:.1f} s, basis: {label})")
         print(f"shortest-path duration: {fmt_duration(r.total_duration)} ({r.total_duration:.1f} s)")
         print(f"route: {' -> '.join(map(str, r.path))}")
         for (u, v), w in zip(zip(r.path, r.path[1:]), r.edge_durations):
@@ -203,6 +207,8 @@ def main(argv=None):
     _add_data_args(q)
     q.add_argument("--from", dest="src", nargs=2, type=float, required=True, metavar=("LAT", "LON"))
     q.add_argument("--to", dest="dst", nargs=2, type=float, required=True, metavar=("LAT", "LON"))
+    q.add_argument("--hour", type=int, default=None,
+                   help="pickup hour 0-23; night (0-6) and evening (20-24) use their own graphs")
     q.set_defaults(fn=cmd_query)
 
     bn = sub.add_parser("bench", help="scaling benchmark over row counts")
