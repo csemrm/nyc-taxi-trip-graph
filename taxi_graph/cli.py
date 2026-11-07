@@ -1,4 +1,4 @@
-"""Command line: generate | stats | query | bench | mst."""
+"""Command line: generate | stats | query | bench | mst | validate."""
 import argparse
 import json
 import random
@@ -8,9 +8,11 @@ from . import traversal
 from .config import Config
 from .mst import kruskal
 from .perf import measure
-from .pipeline import Engine, build
+from .pipeline import Engine, build, selected_periods
 from .shortest_path import Dijkstra, SUCCESS, fmt_duration
 from .synthetic import generate
+from .selection import run_selection
+from .validation import run_validation
 
 
 def _add_data_args(p):
@@ -50,12 +52,18 @@ def cmd_stats(a):
 
 
 def cmd_query(a):
-    b = build(_cfg(a))
+    if a.hour is not None and not 0 <= a.hour <= 23:
+        raise ValueError("--hour must be 0-23")
+    b = build(_cfg(a), periods=selected_periods() if a.hour is not None else None)
     eng = Engine(b)
-    r = eng.route(a.src[0], a.src[1], a.dst[0], a.dst[1])
+    r, est, basis = eng.estimate(a.src[0], a.src[1], a.dst[0], a.dst[1], hour=a.hour)
     print(f"status: {r.status}")
     if r.status == SUCCESS:
-        print(f"estimated duration: {fmt_duration(r.total_duration)} ({r.total_duration:.1f} s)")
+        label = {"direct": "direct edge", "path": "shortest path",
+                 "period-direct": "period graph, direct edge",
+                 "period-path": "period graph, shortest path"}[basis]
+        print(f"best estimate: {fmt_duration(est)} ({est:.1f} s, basis: {label})")
+        print(f"shortest-path duration: {fmt_duration(r.total_duration)} ({r.total_duration:.1f} s)")
         print(f"route: {' -> '.join(map(str, r.path))}")
         for (u, v), w in zip(zip(r.path, r.path[1:]), r.edge_durations):
             print(f"  {u} -> {v}: {w:.1f} s")
@@ -97,6 +105,90 @@ def cmd_mst(a):
     print(f"MST forest edges={len(edges)} total_cost={total:.1f} s (connectivity analysis, not a trip estimate)")
 
 
+def _row(label, m):
+    if m is None:
+        return f"  {label:<28} (no data)"
+    return (f"  {label:<28} n={m['n']:<7} MAE={m['mae_s']:7.1f}s  medAE={m['median_ae_s']:7.1f}s  "
+            f"RMSE={m['rmse_s']:7.1f}s  bias={m['bias_s']:+7.1f}s  "
+            f"MAPE={m['mape'] * 100:5.1f}%  medAPE={m['median_ape'] * 100:5.1f}%  "
+            f"<=20%: {m['within_20pct'] * 100:4.1f}%")
+
+
+def print_validation(r):
+    sp, acc, ov = r["split"], r["test_trip_accounting"], r["overall"]
+    print(f"split: 1 in {sp['fold']} trips held out -> train={sp['train_trips']} "
+          f"test={sp['test_trips']}; graph V={r['graph']['V']} E={r['graph']['E_all_day']}")
+    print("test trips: same-cell excluded={same_cell_excluded}, unseen in train="
+          "{origin_or_dest_unseen_in_train}, no path={no_path}, covered={covered} "
+          "({pct:.2f}% of predictable)".format(pct=acc["coverage_of_predictable"] * 100, **acc))
+    print("\nOverall accuracy (covered trips):")
+    print(_row("shortest path (Dijkstra)", ov["shortest_path"]))
+    print(_row("direct edge, else path", ov["direct_first"]))
+    print(_row("global mean baseline", ov["global_mean_baseline"]))
+    nd = ov["where_no_direct_edge"]
+    print(f"\nWhere no direct edge exists ({nd['trips']} trips):")
+    print(_row("shortest path", nd["shortest_path"]))
+    d = ov["where_direct_edge_exists"]
+    print(f"\nWhere a direct edge also exists ({d['trips']} trips):")
+    print(_row("shortest path", d["shortest_path"]))
+    print(_row("direct edge only", d["direct_edge"]))
+    tod = r["time_of_day"]
+    print("\nTime-of-day graphs vs all-day graph (same trips, covered by both):")
+    for p in tod["per_period"]:
+        print(f"[{p['period']} {p['hours'][0]:02d}-{p['hours'][1]:02d}h] test={p['test_trips']} "
+              f"mean actual={p['mean_actual_s'] or 0:.0f}s edges={p['graph_edges']} "
+              f"coverage all-day={((p['coverage_all_day'] or 0) * 100):.1f}% "
+              f"period={((p['coverage_period_graph'] or 0) * 100):.1f}%")
+        print(_row("all-day graph", p["all_day_on_common"]))
+        print(_row("period graph", p["period_on_common"]))
+    a = tod["all_periods"]
+    print("[all periods]")
+    print(_row("all-day graph (common)", a["all_day_on_common"]))
+    print(_row("period graph (common)", a["period_on_common"]))
+    print(_row("all-day graph (covered)", a["all_day_on_covered"]))
+    print(_row("hybrid: period else all-day", a["hybrid_on_covered"]))
+    print("Direct edge first, else shortest path (covered trips):")
+    print(_row("all-day graph", a["all_day_direct_first_on_covered"]))
+    print(_row("period graph", a["period_direct_first_on_covered"]))
+
+
+def cmd_validate(a):
+    r = run_validation(_cfg(a), fold=a.fold)
+    if a.out:
+        with open(a.out, "w") as f:
+            json.dump(r, f, indent=2)
+    print_validation(r)
+
+
+def cmd_tune(a):
+    r = run_selection(_cfg(a))
+    if a.out:
+        with open(a.out, "w") as f:
+            json.dump(r, f, indent=2)
+    sp, sel = r["split"], r["selected_on_validation"]
+    print(f"split: train={sp['train_trips']} validation={sp['validation_trips']} "
+          f"test={sp['test_trips']} (covered predictable: {sp['test_predictable_covered']}); "
+          f"V={r['graph']['V']} E={r['graph']['E_all_day']}")
+    print("\nChosen on VALIDATION only:")
+    for p in sel["periods"]:
+        print(f"  {p['period']:<8} val n={p['val_trips']:<6} MAE all-day={p['val_mae_all_day_s']:.1f}s "
+              f"period={p['val_mae_period_s']:.1f}s -> "
+              f"{'period graph' if p['use_period_graph'] else 'all-day graph'}")
+    print(f"  chained-path scale factor = {sel['chain_scale_factor']:.4f} "
+          f"(fit on {sel['chain_fit_trips']} validation trips)")
+    print("\nTEST results:")
+    t = r["test"]
+    print(_row("all-day, direct first", t["all_day_df"]))
+    print(_row("all-day + chain scale", t["all_day_df_calibrated"]))
+    print(_row("period graphs, direct first", t["period_df"]))
+    print(_row("selected periods", t["selected_df"]))
+    print(_row("selected + chain scale", t["selected_df_calibrated"]))
+    c = r["test_chained_only"]
+    print("\nTEST, chained-path trips only (no direct edge):")
+    print(_row("before scale", c["before"]))
+    print(_row("after scale", c["after"]))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="taxi_graph", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -115,6 +207,8 @@ def main(argv=None):
     _add_data_args(q)
     q.add_argument("--from", dest="src", nargs=2, type=float, required=True, metavar=("LAT", "LON"))
     q.add_argument("--to", dest="dst", nargs=2, type=float, required=True, metavar=("LAT", "LON"))
+    q.add_argument("--hour", type=int, default=None,
+                   help="pickup hour 0-23; night (0-6) and evening (20-24) use their own graphs")
     q.set_defaults(fn=cmd_query)
 
     bn = sub.add_parser("bench", help="scaling benchmark over row counts")
@@ -128,6 +222,17 @@ def main(argv=None):
     m = sub.add_parser("mst", help="optional Kruskal MST analysis")
     _add_data_args(m)
     m.set_defaults(fn=cmd_mst)
+
+    v = sub.add_parser("validate", help="held-out accuracy + time-of-day graph comparison")
+    _add_data_args(v)
+    v.add_argument("--fold", type=int, default=5, help="hold out every FOLD-th trip (default 5 = 20%%)")
+    v.add_argument("--out", help="also write full results as JSON")
+    v.set_defaults(fn=cmd_validate)
+
+    t = sub.add_parser("tune", help="train/validation/test: choose periods + chain scale on validation, report test")
+    _add_data_args(t)
+    t.add_argument("--out", help="also write full results as JSON")
+    t.set_defaults(fn=cmd_tune)
 
     a = p.parse_args(argv)
     try:

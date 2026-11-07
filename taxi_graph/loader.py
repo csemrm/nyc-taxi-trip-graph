@@ -23,8 +23,10 @@ class CleaningSummary:
         return {"read": self.read, "kept": self.kept, "removed": dict(self.removed)}
 
 
-def iter_clean_trips(cfg, summary):
+def iter_clean_trips(cfg, summary, with_hour=False):
     """Yield (plat, plon, dlat, dlon, duration_s) for valid rows.
+
+    With with_hour=True a 6th item, the pickup hour 0-23, is appended.
 
     Raises FileNotFoundError / ValueError with a clear message (US-DP-01).
     """
@@ -42,8 +44,8 @@ def iter_clean_trips(cfg, summary):
         except ValueError as e:
             raise ValueError(f"dataset missing required column: {e}") from e
         t_idx = header.index(COLS["time"]) if COLS["time"] in header else None
-        if cfg.hour_range is not None and t_idx is None:
-            raise ValueError("hour_range set but dataset has no pickup_datetime column")
+        if (cfg.hour_range is not None or with_hour) and t_idx is None:
+            raise ValueError("pickup hour needed but dataset has no pickup_datetime column")
 
         i_plon, i_plat, i_dlon, i_dlat, i_dur = (
             idx["plon"], idx["plat"], idx["dlon"], idx["dlat"], idx["dur"])
@@ -79,14 +81,18 @@ def iter_clean_trips(cfg, summary):
             if dur > dmax:
                 removed["duration_too_large"] += 1
                 continue
-            if hr is not None:
+            h = None
+            if hr is not None or with_hour:
                 try:
                     h = int(row[t_idx][11:13])
                 except (ValueError, IndexError):
                     removed["bad_pickup_time"] += 1
                     continue
-                if not (hr[0] <= h < hr[1]):
+                if hr is not None and not (hr[0] <= h < hr[1]):
                     removed["outside_hour_range"] += 1
                     continue
             summary.kept += 1
-            yield plat, plon, dlat, dlon, dur
+            if with_hour:
+                yield plat, plon, dlat, dlon, dur, h
+            else:
+                yield plat, plon, dlat, dlon, dur

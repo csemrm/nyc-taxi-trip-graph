@@ -21,6 +21,7 @@ docker compose run --rm app stats --csv /data/NYC.csv          # build graph + s
 docker compose run --rm app query --csv /data/NYC.csv --from 40.7580 -73.9855 --to 40.6413 -73.7781
 docker compose run --rm app bench --csv /data/NYC.csv --sizes 100000 500000 1458644
 docker compose run --rm app mst --csv /data/NYC.csv            # optional Kruskal
+docker compose run --rm app validate --csv /data/NYC.csv       # held-out accuracy + time-of-day graphs (~30 s)
 
 # Local
 python3 -m unittest discover -s tests
@@ -33,6 +34,10 @@ Reference numbers (full dataset, default 0.005 deg grid, mean): build ~5 s, V=40
 ## Code map
 
 `config` (frozen `Config`) -> `loader` (streaming clean, per-reason counts) -> `location` (grid key + dict key->vertex id) -> `graph` (`EdgeAggregator`, CSR `TravelGraph`) -> `traversal` (BFS, DFS, weak components) / `heap` + `shortest_path` (indexed heap Dijkstra) / `mst` (Kruskal) -> `pipeline` (`build`, `Engine`) -> `cli`. `perf` and `synthetic` are helpers.
+
+`validation` (separate from `pipeline`) does the train/test split (every `fold`-th cleaned trip is test; graph, index and baseline use train only), per-period graphs (`PERIODS`) and error metrics. It uses `Dijkstra.distances()` (multi-target, early stop) so predictions cost one search per distinct origin. `iter_clean_trips(..., with_hour=True)` appends the pickup hour. Results and caveats are in `docs/results.md`; key findings: shortest path is biased about -100 s, so `Engine.estimate()` uses a direct edge when one exists and the shortest path otherwise (MAE 268 s -> 250 s); period graphs help mainly at night/evening and slightly hurt other periods under direct-first.
+
+`selection.run_selection` (CLI `tune`) is the clean protocol for any data-fitted choice: index % 5 == 0 test, == 1 validation, rest train; fit on validation, report once on test. Result: use period graphs only for night and evening (MAE 252 -> 237 s); a chained-path scale factor fixed bias but not error and was not adopted. `query --hour H` uses the selected period graphs (`pipeline.SELECTED_PERIODS`) via `build(cfg, periods=...)` and `Engine.estimate(..., hour=H)`, falling back to the all-day graph.
 
 Performance design choices to preserve:
 - One int key per grid cell and one packed int `(u<<32)|v` per edge; single pass aggregation O(T).

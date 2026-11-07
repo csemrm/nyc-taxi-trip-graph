@@ -93,6 +93,46 @@ class Dijkstra:
             parent[v] = -1
         return found, total, path, visited, relaxed
 
+    def distances(self, src, targets):
+        """Single-source Dijkstra that stops once every vertex in `targets` is settled.
+
+        Returns (dict target -> shortest distance for reachable targets, visited).
+        Lets many queries sharing a source cost one search: O((V+E) log V) per
+        distinct source instead of per query.
+        """
+        g = self.g
+        off, tg, wt = g.offsets, g.targets, g.weights
+        dist, heap = self._dist, self._heap
+        want = set(targets)
+        want.discard(src)
+        found = {}
+        touched = [src]
+        dist[src] = 0.0
+        heap.push_or_update(src)
+        visited = 0
+        remaining = len(want)
+        while remaining and len(heap):
+            u = heap.pop_min()
+            visited += 1
+            du = dist[u]
+            if u in want:
+                found[u] = du
+                remaining -= 1
+                if not remaining:
+                    break
+            for i in range(off[u], off[u + 1]):
+                v = tg[i]
+                nd = du + wt[i]
+                if nd < dist[v]:
+                    if dist[v] == INF:
+                        touched.append(v)
+                    dist[v] = nd
+                    heap.push_or_update(v)
+        heap.clear()
+        for v in touched:
+            dist[v] = INF
+        return found, visited
+
     def route(self, src, dst):
         """Full RouteResult for vertex ids; None ids => LOCATION_NOT_IN_GRAPH."""
         import time
