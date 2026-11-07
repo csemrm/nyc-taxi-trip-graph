@@ -53,10 +53,12 @@ def cmd_stats(a):
 def cmd_query(a):
     b = build(_cfg(a))
     eng = Engine(b)
-    r = eng.route(a.src[0], a.src[1], a.dst[0], a.dst[1])
+    r, est, basis = eng.estimate(a.src[0], a.src[1], a.dst[0], a.dst[1])
     print(f"status: {r.status}")
     if r.status == SUCCESS:
-        print(f"estimated duration: {fmt_duration(r.total_duration)} ({r.total_duration:.1f} s)")
+        print(f"best estimate: {fmt_duration(est)} ({est:.1f} s, basis: "
+              f"{'direct edge' if basis == 'direct' else 'shortest path'})")
+        print(f"shortest-path duration: {fmt_duration(r.total_duration)} ({r.total_duration:.1f} s)")
         print(f"route: {' -> '.join(map(str, r.path))}")
         for (u, v), w in zip(zip(r.path, r.path[1:]), r.edge_durations):
             print(f"  {u} -> {v}: {w:.1f} s")
@@ -113,10 +115,14 @@ def print_validation(r):
           f"test={sp['test_trips']}; graph V={r['graph']['V']} E={r['graph']['E_all_day']}")
     print("test trips: same-cell excluded={same_cell_excluded}, unseen in train="
           "{origin_or_dest_unseen_in_train}, no path={no_path}, covered={covered} "
-          "({pct:.1f}% of predictable)".format(pct=acc["coverage_of_predictable"] * 100, **acc))
+          "({pct:.2f}% of predictable)".format(pct=acc["coverage_of_predictable"] * 100, **acc))
     print("\nOverall accuracy (covered trips):")
     print(_row("shortest path (Dijkstra)", ov["shortest_path"]))
+    print(_row("direct edge, else path", ov["direct_first"]))
     print(_row("global mean baseline", ov["global_mean_baseline"]))
+    nd = ov["where_no_direct_edge"]
+    print(f"\nWhere no direct edge exists ({nd['trips']} trips):")
+    print(_row("shortest path", nd["shortest_path"]))
     d = ov["where_direct_edge_exists"]
     print(f"\nWhere a direct edge also exists ({d['trips']} trips):")
     print(_row("shortest path", d["shortest_path"]))
@@ -136,6 +142,9 @@ def print_validation(r):
     print(_row("period graph (common)", a["period_on_common"]))
     print(_row("all-day graph (covered)", a["all_day_on_covered"]))
     print(_row("hybrid: period else all-day", a["hybrid_on_covered"]))
+    print("Direct edge first, else shortest path (covered trips):")
+    print(_row("all-day graph", a["all_day_direct_first_on_covered"]))
+    print(_row("period graph", a["period_direct_first_on_covered"]))
 
 
 def cmd_validate(a):

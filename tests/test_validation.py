@@ -91,6 +91,21 @@ class ValidationTests(unittest.TestCase):
             if p["test_trips"]:
                 self.assertLessEqual(p["coverage_period_graph"], p["coverage_all_day"])
 
+    def test_direct_first_consistent(self):
+        r = run_validation(self.cfg, fold=5)
+        ov = r["overall"]
+        n_direct = ov["where_direct_edge_exists"]["trips"]
+        n_none = ov["where_no_direct_edge"]["trips"]
+        self.assertEqual(n_direct + n_none, ov["shortest_path"]["n"])
+        self.assertEqual(ov["direct_first"]["n"], ov["shortest_path"]["n"])
+        # direct-first == direct edge on direct subset, shortest path elsewhere
+        total = (ov["where_direct_edge_exists"]["direct_edge"]["mae_s"] * n_direct
+                 + ov["where_no_direct_edge"]["shortest_path"]["mae_s"] * n_none)
+        self.assertAlmostEqual(ov["direct_first"]["mae_s"], total / (n_direct + n_none), places=6)
+        tod = r["time_of_day"]["all_periods"]
+        self.assertEqual(tod["period_direct_first_on_covered"]["n"],
+                         tod["all_day_direct_first_on_covered"]["n"])
+
     def test_bad_fold(self):
         with self.assertRaises(ValueError):
             run_validation(self.cfg, fold=1)

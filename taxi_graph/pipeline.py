@@ -9,7 +9,7 @@ from .graph import EdgeAggregator, TravelGraph
 from .loader import CleaningSummary, iter_clean_trips
 from .location import LocationIndex, LocationNormalizer
 from .shortest_path import (Dijkstra, RouteResult, INVALID_COORDINATES,
-                            LOCATION_NOT_IN_GRAPH)
+                            LOCATION_NOT_IN_GRAPH, SUCCESS)
 
 
 @dataclass
@@ -47,6 +47,22 @@ class Engine:
     def vertex_for(self, lat, lon):
         k = self.built.normalizer.key(lat, lon)
         return None if k is None else self.built.index.lookup(k)
+
+    def estimate(self, plat, plon, dlat, dlon):
+        """Best duration estimate: direct edge if observed, else shortest path.
+
+        Validation showed shortest path is biased low (about -100 s) because it takes
+        the minimum over noisy chained means, while a direct edge is unbiased.
+        Returns (RouteResult, seconds_or_None, "direct"|"path"|None).
+        """
+        r = self.route(plat, plon, dlat, dlon)
+        if r.status != SUCCESS:
+            return r, None, None
+        if r.source != r.destination:
+            w = self.built.graph.edge_weight(r.source, r.destination)
+            if w is not None:
+                return r, w, "direct"
+        return r, r.total_duration, "path"
 
     def route(self, plat, plon, dlat, dlon):
         n = self.built.normalizer

@@ -112,15 +112,22 @@ def run_validation(cfg, fold=5, periods=PERIODS):
     # --- overall accuracy (FR-14 style comparison included) -------------------
     sp_pairs = [(d, a) for _, _, a, _, d in covered]
     base_pairs = [(global_mean, a) for _, _, a, _, _ in covered]
-    direct_sp, direct_dir = [], []
+    direct_sp, direct_dir, no_direct_sp, df_pairs = [], [], [], []
     for u, v, a, _, d in covered:
         w = g_all.edge_weight(u, v)
         if w is not None:
             direct_sp.append((d, a))
             direct_dir.append((w, a))
+            df_pairs.append((w, a))
+        else:
+            no_direct_sp.append((d, a))
+            df_pairs.append((d, a))
     overall = {
         "shortest_path": metrics(sp_pairs),
+        "direct_first": metrics(df_pairs),     # direct edge if it exists, else shortest path
         "global_mean_baseline": metrics(base_pairs),
+        "where_no_direct_edge": {"trips": len(no_direct_sp),
+                                 "shortest_path": metrics(no_direct_sp)},
         "where_direct_edge_exists": {
             "trips": len(direct_sp),
             "shortest_path": metrics(direct_sp),
@@ -130,7 +137,8 @@ def run_validation(cfg, fold=5, periods=PERIODS):
 
     # --- time-of-day graphs ----------------------------------------------------
     per_period = []
-    agg_rows = {"all_day_common": [], "period_common": [], "all_day_cov": [], "hybrid_cov": []}
+    agg_rows = {"all_day_common": [], "period_common": [], "all_day_cov": [], "hybrid_cov": [],
+                "all_day_df_cov": [], "period_df_cov": []}
     for pi, (name, a, b) in enumerate(periods):
         trips = [r for r in resolved if r[3] == pi]
         sp_p = _shortest(g_p[pi], {(u, v) for u, v, _, _ in trips})
@@ -141,10 +149,25 @@ def run_validation(cfg, fold=5, periods=PERIODS):
         a_cov = [(sp_all[(u, v)], act) for u, v, act in cov_all]
         h_cov = [((sp_p[(u, v)] if (u, v) in sp_p else sp_all[(u, v)]), act)
                  for u, v, act in cov_all]
+        # direct-first estimators over every all-day-covered trip
+        ad_df, pd_df = [], []
+        for u, v, act in cov_all:
+            w_all = g_all.edge_weight(u, v)
+            ad_df.append((w_all if w_all is not None else sp_all[(u, v)], act))
+            w_p = g_p[pi].edge_weight(u, v)
+            if w_p is not None:
+                est = w_p
+            elif (u, v) in sp_p:
+                est = sp_p[(u, v)]
+            else:
+                est = w_all if w_all is not None else sp_all[(u, v)]
+            pd_df.append((est, act))
         agg_rows["all_day_common"] += a_common
         agg_rows["period_common"] += p_common
         agg_rows["all_day_cov"] += a_cov
         agg_rows["hybrid_cov"] += h_cov
+        agg_rows["all_day_df_cov"] += ad_df
+        agg_rows["period_df_cov"] += pd_df
         per_period.append({
             "period": name, "hours": [a, b],
             "test_trips": len(trips),
@@ -157,12 +180,16 @@ def run_validation(cfg, fold=5, periods=PERIODS):
             "period_on_common": metrics(p_common),
             "all_day_on_covered": metrics(a_cov),
             "hybrid_on_covered": metrics(h_cov),
+            "all_day_direct_first_on_covered": metrics(ad_df),
+            "period_direct_first_on_covered": metrics(pd_df),
         })
     periods_summary = {
         "all_day_on_common": metrics(agg_rows["all_day_common"]),
         "period_on_common": metrics(agg_rows["period_common"]),
         "all_day_on_covered": metrics(agg_rows["all_day_cov"]),
         "hybrid_on_covered": metrics(agg_rows["hybrid_cov"]),
+        "all_day_direct_first_on_covered": metrics(agg_rows["all_day_df_cov"]),
+        "period_direct_first_on_covered": metrics(agg_rows["period_df_cov"]),
     }
 
     return {

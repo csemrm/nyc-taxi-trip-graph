@@ -82,6 +82,26 @@ class PipelineTests(unittest.TestCase):
                          "LOCATION_NOT_IN_GRAPH")
         self.assertEqual(eng.route(40.80, -73.90, 40.75, -73.98).status, "NO_PATH")
 
+    def test_estimate_prefers_direct_edge(self):
+        # A->B 100 s, B->C 200 s, A->C direct 1000 s: shortest path 300, direct 1000.
+        self.write(row(-73.98, 40.75, -73.95, 40.78, 100),
+                   row(-73.95, 40.78, -73.90, 40.80, 200),
+                   row(-73.98, 40.75, -73.90, 40.80, 1000))
+        eng = Engine(build(Config(csv_path=self.path)))
+        r, est, basis = eng.estimate(40.75, -73.98, 40.80, -73.90)
+        self.assertAlmostEqual(r.total_duration, 300.0)
+        self.assertEqual((basis, est), ("direct", 1000.0))
+        r, est, basis = eng.estimate(40.75, -73.98, 40.78, -73.95)   # A->B direct
+        self.assertEqual((basis, est), ("direct", 100.0))
+        self.assertEqual(eng.estimate(0, 0, 40.8, -73.9)[1:], (None, None))  # invalid coords
+
+    def test_estimate_falls_back_to_path(self):
+        self.write(row(-73.98, 40.75, -73.95, 40.78, 100),
+                   row(-73.95, 40.78, -73.90, 40.80, 200))
+        eng = Engine(build(Config(csv_path=self.path)))
+        r, est, basis = eng.estimate(40.75, -73.98, 40.80, -73.90)
+        self.assertEqual((basis, est), ("path", 300.0))
+
     def test_determinism(self):
         generate(self.path, 3000, seed=3)
         a = build(Config(csv_path=self.path))

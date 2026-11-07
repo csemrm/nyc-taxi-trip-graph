@@ -81,7 +81,7 @@ Query statuses: `SUCCESS`, `NO_PATH`, `LOCATION_NOT_IN_GRAPH`, `INVALID_COORDINA
 
 Full dataset, default settings: about 5 s build, V = 4001, E = 117,785, Dijkstra about 5 ms per query, about 39 MB peak memory.
 
-Held-out validation (20% of trips): MAE 268 s versus 465 s for a constant-mean baseline. Time-of-day graphs cut MAE a further 8% (265.9 s to 244.7 s). Direct edges alone beat shortest path where they exist, because the shortest path underestimates by about 100 s. Details in [docs/results.md](docs/results.md).
+Held-out validation (20% of trips), MAE: constant-mean baseline 465 s, shortest path 268 s, direct edge else shortest path 250 s (shortest path alone is biased about -100 s), period graphs with direct-first 239 s. The period-graph gain comes mainly from night and evening trips. `query` reports the direct-first estimate. Details and caveats in [docs/results.md](docs/results.md).
 
 ## Layout
 
