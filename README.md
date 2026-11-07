@@ -6,12 +6,21 @@ Pure Python 3.12 standard library, no dependencies. See [docs/pipeline.md](docs/
 
 ## 1. Get the data
 
-The dataset is not in git (about 200 MB). Download it with the [Kaggle CLI](https://github.com/Kaggle/kaggle-api) (needs `~/.kaggle/kaggle.json`):
+The dataset `data/NYC.csv` (about 200 MB, 1,458,644 rows) is stored in this repository with [Git LFS](https://git-lfs.com). Install it once before cloning, otherwise `data/NYC.csv` will be a small pointer file instead of the data:
+
+```bash
+brew install git-lfs        # or see https://git-lfs.com for other platforms
+git lfs install
+git clone <repo-url>        # or, in an existing clone: git lfs pull
+```
+
+GitHub's free LFS quota is 1 GB of storage and 1 GB of bandwidth per month, so each full clone or pull of the file costs about 200 MB of it. The data comes from the Kaggle dataset `yasserh/nyc-taxi-trip-duration`; check its terms before sharing this repository outside the team.
+
+To fetch it from Kaggle instead (needs the [Kaggle CLI](https://github.com/Kaggle/kaggle-api) and `~/.kaggle/kaggle.json`):
 
 ```bash
 mkdir -p data
 kaggle datasets download -d yasserh/nyc-taxi-trip-duration -p data --unzip
-# creates data/NYC.csv (1,458,644 rows)
 ```
 
 The loader expects the Kaggle columns `pickup_longitude`, `pickup_latitude`, `dropoff_longitude`, `dropoff_latitude`, `trip_duration` (and `pickup_datetime` if you use `--hours`).
