@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYC Taxi Trip Estimator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root { --bg:#fff; --fg:#1d2430; --muted:#5b6678; --line:#d9dee7; --accent:#1a6fd6; --warn:#b3261e; --card:#f6f8fb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161d; --fg:#e6eaf1; --muted:#98a3b5; --line:#2a3342; --accent:#5aa2ff; --warn:#ff8a80; --card:#1a2029; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; }
+  body { font:14px/1.45 system-ui, sans-serif; color:var(--fg); background:var(--bg); display:flex; flex-direction:column; }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:17px; }
+  header p { margin:2px 0 0; color:var(--muted); font-size:12.5px; }
+  main { flex:1; display:flex; min-height:0; }
+  #map { flex:1; min-width:0; }
+  aside { width:340px; max-width:45vw; padding:14px 16px; overflow:auto; border-left:1px solid var(--line); background:var(--bg); }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:16px 0 6px; }
+  h2:first-child { margin-top:0; }
+  label { display:block; font-weight:600; margin-bottom:4px; }
+  select, button { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); }
+  button { cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .step { padding:8px 10px; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  .big { font-size:28px; font-weight:700; margin:0; }
+  .muted { color:var(--muted); }
+  .err { color:var(--warn); font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:3px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  ol { margin:4px 0 0; padding-left:20px; font-size:13px; font-variant-numeric:tabular-nums; }
+  .note { font-size:12px; color:var(--muted); margin-top:14px; }
+  @media (max-width: 760px) {
+    main { flex-direction:column; }
+    #map { flex:none; height:55vh; }
+    aside { width:auto; max-width:none; border-left:0; border-top:1px solid var(--line); flex:1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NYC Taxi Trip Estimator</h1>
+  <p>Historical taxi trips as a weighted graph; Dijkstra finds the cheapest chain of observed trips. No ML.</p>
+</header>
+<main>
+  <div id="map" aria-label="Map: click a pickup point, then a destination"></div>
+  <aside>
+    <h2>Query</h2>
+    <div class="step" id="step">Loading…</div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label for="hour">Pickup hour</label>
+        <select id="hour">
+          <option value="">Any (all-day graph)</option>
+        </select>
+      </div>
+      <button id="reset" type="button" style="align-self:flex-end">Reset</button>
+    </div>
+
+    <h2>Result</h2>
+    <div id="result"><span class="muted">Click the map to choose a pickup, then a destination.</span></div>
+
+    <p class="note" id="graphinfo"></p>
+    <p class="note">Blue dots are locations seen in the data (grid cells); clicks are snapped to the cell they fall in. The drawn route joins cell centers: it shows which observed trips were chained, not a street route.</p>
+  </aside>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var map = L.map("map", { preferCanvas: true });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18, attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  var cellLayer = L.layerGroup().addTo(map);
+  var routeLayer = L.layerGroup().addTo(map);
+  var pickup = null, dest = null, pickupMarker = null, destMarker = null, seq = 0;
+
+  // hour options
+  for (var h = 0; h < 24; h++) {
+    var o = document.createElement("option");
+    o.value = String(h);
+    o.textContent = (h < 10 ? "0" : "") + h + ":00";
+    $("hour").appendChild(o);
+  }
+
+  function setStep() {
+    var s = $("step");
+    if (!pickup) s.textContent = "1. Click the pickup point.";
+    else if (!dest) s.textContent = "2. Click the destination.";
+    else s.textContent = "Change the hour or click Reset to start over.";
+  }
+
+  function el(tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  function row(table, k, v) {
+    var tr = document.createElement("tr");
+    tr.appendChild(el("td", k)); tr.appendChild(el("td", v));
+    table.appendChild(tr);
+  }
+
+  function fmt(sec) {
+    var s = Math.round(sec);
+    return Math.floor(s / 60) + " min " + (s % 60 < 10 ? "0" : "") + (s % 60) + " s";
+  }
+
+  var BASIS = {
+    "direct": "direct edge (all-day graph)",
+    "path": "shortest path (all-day graph)",
+    "period-direct": "direct edge (time-of-day graph)",
+    "period-path": "shortest path (time-of-day graph)"
+  };
+
+  function showError(msg) {
+    var box = $("result"); box.textContent = "";
+    box.appendChild(el("p", msg, "err"));
+  }
+
+  function render(d) {
+    routeLayer.clearLayers();
+    var box = $("result"); box.textContent = "";
+    if (d.status !== "SUCCESS") {
+      var t = d.status === "LOCATION_NOT_IN_GRAPH"
+        ? "Location not in graph: no trips in the data start or end in that grid cell. Pick a blue dot area."
+        : d.message;
+      box.appendChild(el("p", t, "err"));
+      return;
+    }
+    box.appendChild(el("p", fmt(d.estimate_s), "big"));
+    box.appendChild(el("div", "Basis: " + (BASIS[d.basis] || d.basis), "muted"));
+    var tb = document.createElement("table");
+    row(tb, "Shortest path (all-day graph)", fmt(d.shortest_path_s));
+    row(tb, "Direct edge", d.direct_s === null ? "none observed" : fmt(d.direct_s));
+    row(tb, "Pickup hour", d.hour === null ? "any" : (d.hour < 10 ? "0" : "") + d.hour + ":00");
+    row(tb, "Legs in route", String(d.legs_s.length));
+    row(tb, "Vertices visited", String(d.stats.visited));
+    row(tb, "Edges relaxed", String(d.stats.relaxed));
+    row(tb, "Search time", d.stats.time_ms + " ms");
+    box.appendChild(tb);
+    if (d.legs_s.length) {
+      box.appendChild(el("h2", "Route legs (all-day shortest path)"));
+      var ol = document.createElement("ol");
+      d.legs_s.forEach(function (w, i) {
+        ol.appendChild(el("li", "Cell " + d.route[i].vertex + " → " + d.route[i + 1].vertex + ": " + fmt(w)));
+      });
+      box.appendChild(ol);
+    }
+    var pts = d.route.map(function (p) { return [p.lat, p.lon]; });
+    if (pts.length > 1) {
+      var line = L.polyline(pts, { color: "#1a6fd6", weight: 4, opacity: 0.85 }).addTo(routeLayer);
+      pts.forEach(function (p) { L.circleMarker(p, { radius: 4, color: "#1a6fd6", fillOpacity: 1 }).addTo(routeLayer); });
+      map.fitBounds(line.getBounds().pad(0.25));
+    }
+  }
+
+  function query() {
+    if (!pickup || !dest) return;
+    var my = ++seq;
+    var qs = "plat=" + pickup.lat + "&plon=" + pickup.lng + "&dlat=" + dest.lat + "&dlon=" + dest.lng;
+    var hr = $("hour").value;
+    if (hr !== "") qs += "&hour=" + encodeURIComponent(hr);
+    fetch("/api/estimate?" + qs).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+    }).then(function (res) {
+      if (my !== seq) return;           // a newer query superseded this one
+      if (!res.ok) showError(res.body.error || "Request failed");
+      else render(res.body);
+    }).catch(function () { if (my === seq) showError("Could not reach the server."); });
+  }
+
+  function marker(latlng, color) {
+    return L.circleMarker(latlng, { radius: 9, color: color, fillColor: color, fillOpacity: 0.9, weight: 2 }).addTo(map);
+  }
+
+  function reset() {
+    seq++;
+    pickup = dest = null;
+    [pickupMarker, destMarker].forEach(function (m) { if (m) map.removeLayer(m); });
+    pickupMarker = destMarker = null;
+    routeLayer.clearLayers();
+    var box = $("result"); box.textContent = "";
+    box.appendChild(el("span", "Click the map to choose a pickup, then a destination.", "muted"));
+    setStep();
+  }
+
+  map.on("click", function (e) {
+    if (pickup && dest) reset();
+    if (!pickup) { pickup = e.latlng; pickupMarker = marker(e.latlng, "#1b8a3a"); }
+    else { dest = e.latlng; destMarker = marker(e.latlng, "#c62828"); query(); }
+    setStep();
+  });
+  $("hour").addEventListener("change", query);
+  $("reset").addEventListener("click", reset);
+
+  Promise.all([fetch("/api/info").then(function (r) { return r.json(); }),
+               fetch("/api/cells").then(function (r) { return r.json(); })]).then(function (res) {
+    var info = res[0], cells = res[1];
+    map.fitBounds([[40.55, -74.05], [40.92, -73.72]]);
+    cells.forEach(function (c) {
+      L.circleMarker(c, { radius: 2, color: "#1a6fd6", weight: 0, fillOpacity: 0.35, interactive: false }).addTo(cellLayer);
+    });
+    var names = Object.keys(info.period_graphs).join(" and ");
+    $("graphinfo").textContent = info.V + " locations, " + info.E + " edges from " + info.trips_used +
+      " trips (" + info.stat + " duration, " + info.cell_deg + "° grid). Time-of-day graphs: " + names + ".";
+    setStep();
+  }).catch(function () { $("step").textContent = "Could not load graph info from the server."; });
+})();
+</script>
+</body>
+</html>

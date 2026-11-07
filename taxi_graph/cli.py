@@ -1,4 +1,4 @@
-"""Command line: generate | stats | query | bench | mst | validate."""
+"""Command line: generate | stats | query | bench | mst | validate | tune | serve."""
 import argparse
 import json
 import random
@@ -189,6 +189,22 @@ def cmd_tune(a):
     print(_row("after scale", c["after"]))
 
 
+def cmd_serve(a):
+    from .web import make_server
+    from .pipeline import selected_periods
+    print(f"building graph from {a.csv} ...", flush=True)
+    b = build(_cfg(a), periods=selected_periods())
+    srv = make_server(b, host=a.host, port=a.port)
+    print(f"V={b.graph.n} E={b.graph.m} built in {b.build_s:.1f}s; "
+          f"serving on http://{a.host}:{srv.server_port}/  (Ctrl+C to stop)", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="taxi_graph", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -233,6 +249,12 @@ def main(argv=None):
     _add_data_args(t)
     t.add_argument("--out", help="also write full results as JSON")
     t.set_defaults(fn=cmd_tune)
+
+    sv = sub.add_parser("serve", help="web UI: map, click pickup and destination")
+    _add_data_args(sv)
+    sv.add_argument("--host", default="127.0.0.1", help="bind address (default localhost; no auth)")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(fn=cmd_serve)
 
     a = p.parse_args(argv)
     try:

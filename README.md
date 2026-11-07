@@ -44,6 +44,18 @@ docker compose run --rm app mst --csv /data/NYC.csv
 
 `./data` is mounted at `/data` inside the container.
 
+### Web UI
+
+```bash
+docker compose up --build web          # then open http://127.0.0.1:8000/
+# or locally:
+python3 -m taxi_graph serve --csv data/NYC.csv --port 8000
+```
+
+Click a pickup point, then a destination on the map; optionally pick a pickup hour. The page shows the estimate, whether it came from a direct edge or a chained shortest path, the route legs, and search statistics. Blue dots are the grid cells that exist in the data; a click in a cell with no trips returns "Location not in graph". The drawn route joins cell centers; it is not a street route.
+
+Notes: the graph is built once at startup (about 5 s on the full data) and held in memory, so each query takes milliseconds. There is no authentication, so the server binds to `127.0.0.1` by default and Docker publishes the port on localhost only. The page loads the Leaflet library (pinned, with integrity hash) from unpkg and map tiles from OpenStreetMap, so the map needs internet access; the API itself does not.
+
 ## 3. Run locally
 
 ```bash
@@ -62,9 +74,10 @@ python3 -m taxi_graph query --csv data/NYC.csv --from 40.7580 -73.9855 --to 40.6
 | `bench --sizes N... --queries Q --memory` | Build/BFS/DFS/Dijkstra timings per row count (`--memory` adds tracemalloc, which slows builds) |
 | `mst` | Kruskal minimum spanning forest (connectivity analysis, not a trip estimate) |
 | `validate --fold K --out F.json` | Hold out every K-th trip; accuracy vs actual durations and vs baselines; per time-of-day graph comparison. See [docs/results.md](docs/results.md) |
+| `serve --host H --port P` | Web UI with map; same data options as the other commands. See [Web UI](#web-ui) |
 | `tune --out F.json` | Train/validation/test (60/20/20): choose which periods use their own graph and test a chained-path scale factor on validation, report on test |
 
-Shared options for `stats`, `query`, `bench`, `mst`, `validate`:
+Shared options for `stats`, `query`, `bench`, `mst`, `validate`, `tune`, `serve`:
 
 | Option | Default | Meaning |
 |---|---|---|

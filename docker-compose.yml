@@ -6,6 +6,16 @@ services:
       - ./data:/data
     entrypoint: ["python", "-m", "taxi_graph"]
 
+  web:
+    build: .
+    image: nyc-taxi-graph
+    volumes:
+      - ./data:/data:ro
+    ports:
+      - "127.0.0.1:8000:8000"        # published on localhost only: the UI has no auth
+    entrypoint: ["python", "-m", "taxi_graph", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["--csv", "/data/NYC.csv"]
+
   test:
     build: .
     image: nyc-taxi-graph
