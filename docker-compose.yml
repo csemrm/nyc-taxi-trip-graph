@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    image: nyc-taxi-graph
+    volumes:
+      - ./data:/data
+    entrypoint: ["python", "-m", "taxi_graph"]
+
+  test:
+    build: .
+    image: nyc-taxi-graph
+    entrypoint: ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
